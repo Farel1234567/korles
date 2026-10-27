@@ -1,45 +1,32 @@
 -- ================= KEY GATE =================
--- Daftar key diambil dari keys.txt di repo GitHub-mu, jadi bisa kamu ubah kapan saja.
--- Format keys.txt (satu key per baris):
---   KEYKU-123              -> berlaku selamanya
---   KEYKU-456|2026-12-31   -> berlaku sampai tanggal itu (YYYY-MM-DD)
---   # baris ini komentar
-local KEYS_URL = "https://raw.githubusercontent.com/Farel1234567/korles/main/keys.txt"
+-- Key dicek ke server Vercel-mu, jadi daftar key tidak pernah tampil di script.
+-- Atur key lewat Environment Variable "KEYS" di dashboard Vercel.
+local CHECK_URL = "https://yanzxiter-keys.vercel.app/api/check"
 local KEY_SAVE_FILE = "korles_key.txt"
 
 local function trimk(s)
 	return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
-local function fetchKeys()
-	local ok, body = pcall(function()
-		return game:HttpGet(KEYS_URL .. "?t=" .. tostring(os.time()), true)
-	end)
-	if not ok or type(body) ~= "string" or #body == 0 or body:match("^404") then return nil end
-	local list = {}
-	for line in body:gmatch("[^\r\n]+") do
-		line = trimk(line)
-		if line ~= "" and line:sub(1, 1) ~= "#" then
-			local k, d = line:match("^(.-)%s*|%s*(%d+%-%d+%-%d+)$")
-			if k and k ~= "" then list[k] = d else list[line] = true end
-		end
-	end
-	return list
+local function urlenc(s)
+	return (tostring(s):gsub("[^%w%-_%.~]", function(c)
+		return string.format("%%%02X", string.byte(c))
+	end))
 end
 
 local function checkKey(k)
 	k = trimk(k)
 	if k == "" then return false, "key kosong" end
-	local list = fetchKeys()
-	if not list then return false, "gagal ambil daftar key (cek internet / URL)" end
-	local v = list[k]
-	if not v then return false, "key salah" end
-	if v ~= true then
-		local y, m, d = v:match("(%d+)%-(%d+)%-(%d+)")
-		local exp = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 23, min = 59, sec = 59 })
-		if os.time() > exp then return false, "key kedaluwarsa" end
-	end
-	return true, "ok"
+	local ok, body = pcall(function()
+		return game:HttpGet(CHECK_URL .. "?key=" .. urlenc(k) .. "&t=" .. tostring(os.time()), true)
+	end)
+	if not ok or type(body) ~= "string" then return false, "gagal terhubung ke server" end
+	body = trimk(body)
+	if body == "ok" then return true, "ok" end
+	if body == "expired" then return false, "key kedaluwarsa" end
+	if body == "invalid" then return false, "key salah" end
+	if body == "limit" then return false, "terlalu banyak percobaan, tunggu sebentar" end
+	return false, "server error"
 end
 
 local function keyGate()
@@ -563,7 +550,7 @@ local function button(text, solid, fn)
 		TextColor3 = solid and Color3.new(0, 0, 0) or ACC, Font = FB, TextSize = 11,
 		AutoButtonColor = false, LayoutOrder = nx(),
 	}, body)
-	roound(b)
+	round(b)
 	b.MouseButton1Click:Connect(function() task.spawn(function() local ok, e = pcall(fn) if not ok then setStatus("error: " .. tostring(e):sub(1, 60), true) end end) end)
 	return b
 end
