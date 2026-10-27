@@ -1,7 +1,164 @@
---[[ KORLES UI
+-- ================= KEY GATE =================
+-- Daftar key diambil dari keys.txt di repo GitHub-mu, jadi bisa kamu ubah kapan saja.
+-- Format keys.txt (satu key per baris):
+--   KEYKU-123              -> berlaku selamanya
+--   KEYKU-456|2026-12-31   -> berlaku sampai tanggal itu (YYYY-MM-DD)
+--   # baris ini komentar
+local KEYS_URL = "https://raw.githubusercontent.com/Farel1234567/korles/main/keys.txt"
+local KEY_SAVE_FILE = "korles_key.txt"
+
+local function trimk(s)
+	return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function fetchKeys()
+	local ok, body = pcall(function()
+		return game:HttpGet(KEYS_URL .. "?t=" .. tostring(os.time()), true)
+	end)
+	if not ok or type(body) ~= "string" or #body == 0 or body:match("^404") then return nil end
+	local list = {}
+	for line in body:gmatch("[^\r\n]+") do
+		line = trimk(line)
+		if line ~= "" and line:sub(1, 1) ~= "#" then
+			local k, d = line:match("^(.-)%s*|%s*(%d+%-%d+%-%d+)$")
+			if k and k ~= "" then list[k] = d else list[line] = true end
+		end
+	end
+	return list
+end
+
+local function checkKey(k)
+	k = trimk(k)
+	if k == "" then return false, "key kosong" end
+	local list = fetchKeys()
+	if not list then return false, "gagal ambil daftar key (cek internet / URL)" end
+	local v = list[k]
+	if not v then return false, "key salah" end
+	if v ~= true then
+		local y, m, d = v:match("(%d+)%-(%d+)%-(%d+)")
+		local exp = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 23, min = 59, sec = 59 })
+		if os.time() > exp then return false, "key kedaluwarsa" end
+	end
+	return true, "ok"
+end
+
+local function keyGate()
+	-- key tersimpan dicek ulang tiap kali, jadi key yang kamu hapus dari keys.txt langsung tidak berlaku
+	local saved
+	pcall(function()
+		if isfile and isfile(KEY_SAVE_FILE) then saved = readfile(KEY_SAVE_FILE) end
+	end)
+	if saved and checkKey(saved) then return true end
+
+	local ACC = Color3.fromRGB(0, 255, 230)
+	local BG = Color3.fromRGB(255, 255, 255)
+	local ROW = Color3.fromRGB(16, 8, 36)
+	local MUT = Color3.fromRGB(190, 170, 230)
+	local BADC = Color3.fromRGB(255, 90, 90)
+	local GOODC = Color3.fromRGB(100, 220, 130)
+	local FB, FM = Enum.Font.GothamBold, Enum.Font.GothamMedium
+
+	local function mk(cls, props, parent)
+		local o = Instance.new(cls)
+		for k, v in pairs(props) do o[k] = v end
+		o.Parent = parent
+		return o
+	end
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "KorlesKey"
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 1000
+	local okp = pcall(function()
+		gui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+	end)
+	if not okp or not gui.Parent then
+		gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	local box = mk("Frame", {
+		Size = UDim2.fromOffset(280, 190), AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundColor3 = BG, BorderSizePixel = 0,
+	}, gui)
+	mk("UICorner", { CornerRadius = UDim.new(0, 8) }, box)
+	mk("UIStroke", { Color = ACC, Thickness = 2 }, box)
+	mk("UIGradient", {
+		Rotation = 45,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 200)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 0, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 230, 255)),
+		}),
+	}, box)
+
+	mk("TextLabel", {
+		Size = UDim2.new(1, -50, 0, 30), Position = UDim2.fromOffset(12, 8), BackgroundTransparency = 1,
+		Text = "YanzXiter", TextColor3 = ACC, Font = FB, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left,
+	}, box)
+	local closeB = mk("TextButton", {
+		Size = UDim2.fromOffset(24, 24), Position = UDim2.new(1, -34, 0, 10), BackgroundColor3 = ROW,
+		Text = "X", TextColor3 = ACC, Font = FB, TextSize = 13, AutoButtonColor = false,
+	}, box)
+	mk("UICorner", { CornerRadius = UDim.new(0, 5) }, closeB)
+	mk("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 40), BackgroundTransparency = 1,
+		Text = "Masukkan key untuk membuka menu", TextColor3 = Color3.new(1, 1, 1), Font = FM, TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, box)
+	local input = mk("TextBox", {
+		Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 66), BackgroundColor3 = ROW,
+		BorderSizePixel = 0, Text = "", PlaceholderText = "KEY", PlaceholderColor3 = MUT, TextColor3 = ACC,
+		Font = FB, TextSize = 13, ClearTextOnFocus = false,
+	}, box)
+	mk("UICorner", { CornerRadius = UDim.new(0, 6) }, input)
+	local status = mk("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 106), BackgroundTransparency = 1,
+		Text = "", TextColor3 = BADC, Font = FM, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, box)
+	local go = mk("TextButton", {
+		Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 1, -46), BackgroundColor3 = ACC,
+		Text = "MASUK", TextColor3 = Color3.new(0, 0, 0), Font = FB, TextSize = 13, AutoButtonColor = false,
+	}, box)
+	mk("UICorner", { CornerRadius = UDim.new(0, 6) }, go)
+
+	local passed, closed, busy = false, false, false
+	local function submit()
+		if busy then return end
+		busy = true
+		status.TextColor3 = MUT
+		status.Text = "mengecek..."
+		task.spawn(function()
+			local k = trimk(input.Text)
+			local ok, why = checkKey(k)
+			if ok then
+				pcall(function() if writefile then writefile(KEY_SAVE_FILE, k) end end)
+				status.TextColor3 = GOODC
+				status.Text = "key benar"
+				passed = true
+			else
+				status.TextColor3 = BADC
+				status.Text = why
+			end
+			busy = false
+		end)
+	end
+	go.MouseButton1Click:Connect(submit)
+	input.FocusLost:Connect(function(enter) if enter then submit() end end)
+	closeB.MouseButton1Click:Connect(function() closed = true end)
+
+	repeat task.wait(0.1) until passed or closed
+	pcall(function() gui:Destroy() end)
+	return passed
+end
+
+if not keyGate() then return end
+-- ================= AKHIR KEY GATE =================
+
+--[[ YanzXiter UI
      Headless + Korblox + Aksesori dengan menu toggle.
      Efek hanya terlihat di layarmu sendiri (client-side).
-     Sembunyikan/tampilkan menu: tombol RightControl atau tombol "KL" kecil. ]]
+     Sembunyikan/tampilkan menu: tombol RightControl atau tombol "YX" kecil. ]]
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -17,13 +174,16 @@ end)
 local DEFAULT_IDS = { 74891470, 10159610478, 10159600649, 141742418 }
 
 -- warna
-local ACC = Color3.fromRGB(255, 122, 0)
-local BG = Color3.fromRGB(14, 14, 16)
-local HD = Color3.fromRGB(22, 22, 26)
-local ROW = Color3.fromRGB(30, 30, 36)
-local OFF = Color3.fromRGB(58, 58, 66)
-local TXT = Color3.fromRGB(235, 235, 240)
-local MUT = Color3.fromRGB(150, 150, 160)
+local ACC = Color3.fromRGB(0, 255, 230)   -- neon cyan
+local BG = Color3.fromRGB(255, 255, 255)   -- ditutup gradient neon
+local HD = Color3.fromRGB(12, 6, 28)
+local ROW = Color3.fromRGB(16, 8, 36)
+local OFF = Color3.fromRGB(70, 50, 110)
+local TXT = Color3.fromRGB(245, 240, 255)
+local MUT = Color3.fromRGB(190, 170, 230)
+local NEON_A = Color3.fromRGB(255, 0, 200)  -- pink neon
+local NEON_B = Color3.fromRGB(130, 0, 255)  -- ungu neon
+local NEON_C = Color3.fromRGB(0, 230, 255)  -- cyan neon
 local GOOD = Color3.fromRGB(100, 220, 130)
 local BAD = Color3.fromRGB(255, 90, 90)
 local FB, FM = Enum.Font.GothamBold, Enum.Font.GothamMedium
@@ -37,6 +197,9 @@ local ui = {}
 
 local function new(cls, props, parent)
 	local o = Instance.new(cls)
+	if (props.BackgroundColor3 == ROW or props.BackgroundColor3 == HD) and props.BackgroundTransparency == nil then
+		o.BackgroundTransparency = 0.3
+	end
 	for k, v in pairs(props) do o[k] = v end
 	o.Parent = parent
 	return o
@@ -312,12 +475,23 @@ local frame = new("Frame", {
 	BackgroundColor3 = BG, BorderSizePixel = 0, ClipsDescendants = true,
 }, gui)
 round(frame, 8)
-new("UIStroke", { Color = ACC, Thickness = 1.5 }, frame)
+new("UIStroke", { Color = ACC, Thickness = 2 }, frame)
+local bgGrad = new("UIGradient", {
+	Rotation = 45,
+	Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, NEON_A),
+		ColorSequenceKeypoint.new(0.5, NEON_B),
+		ColorSequenceKeypoint.new(1, NEON_C),
+	}),
+}, frame)
+table.insert(conns, RS.Heartbeat:Connect(function(dt)
+	bgGrad.Rotation = (bgGrad.Rotation + dt * 25) % 360
+end))
 
 local head = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = HD, BorderSizePixel = 0 }, frame)
 new("TextLabel", {
 	Size = UDim2.new(1, -70, 1, 0), Position = UDim2.fromOffset(10, 0), BackgroundTransparency = 1,
-	Text = "KORLES", TextColor3 = ACC, Font = FB, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
+	Text = "YanzXiter", TextColor3 = ACC, Font = FB, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
 }, head)
 local bMin = new("TextButton", {
 	Size = UDim2.fromOffset(24, 24), Position = UDim2.new(1, -56, 0, 5), BackgroundColor3 = OFF,
@@ -349,7 +523,7 @@ local order = 0
 local function nx() order = order + 1 return order end
 local function section(t)
 	new("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Text = string.upper(t), TextColor3 = ACC,
+		Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, Text = string.upper(t), TextColor3 = Color3.new(1, 1, 1),
 		Font = FB, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = nx(),
 	}, body)
 end
@@ -389,7 +563,7 @@ local function button(text, solid, fn)
 		TextColor3 = solid and Color3.new(0, 0, 0) or ACC, Font = FB, TextSize = 11,
 		AutoButtonColor = false, LayoutOrder = nx(),
 	}, body)
-	round(b)
+	roound(b)
 	b.MouseButton1Click:Connect(function() task.spawn(function() local ok, e = pcall(fn) if not ok then setStatus("error: " .. tostring(e):sub(1, 60), true) end end) end)
 	return b
 end
@@ -486,11 +660,15 @@ local function draggable(handle, target, onTap)
 end
 
 local mini = new("TextButton", {
-	Size = UDim2.fromOffset(42, 42), Position = UDim2.fromOffset(10, 60), BackgroundColor3 = BG, Text = "KL",
-	TextColor3 = ACC, Font = FB, TextSize = 13, AutoButtonColor = false, Visible = false,
+	Size = UDim2.fromOffset(42, 42), Position = UDim2.fromOffset(10, 60), BackgroundColor3 = BG, Text = "YX",
+	TextColor3 = Color3.new(1, 1, 1), Font = FB, TextSize = 13, AutoButtonColor = false, Visible = false,
 }, gui)
 round(mini, 10)
-new("UIStroke", { Color = ACC, Thickness = 1.5 }, mini)
+new("UIStroke", { Color = ACC, Thickness = 2 }, mini)
+new("UIGradient", {
+	Rotation = 45,
+	Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, NEON_A), ColorSequenceKeypoint.new(1, NEON_C) }),
+}, mini)
 
 draggable(head, frame, nil)
 draggable(mini, mini, function()
